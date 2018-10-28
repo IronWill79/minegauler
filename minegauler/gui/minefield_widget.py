@@ -5,16 +5,13 @@ April 2018, Lewis Gaul
 
 Exports:
   MinefieldWidget
-    A minefield widget class, to be packed in a parent container. Receives
-    clicks on the cells and calls any registered functions.
+    A minefield widget class. Receives clicks on the cells and calls any
+    registered functions.
     Arguments:
       parent - Parent widget
-      x_size - Number of columns
-      y_size - Number of rows
+      board - The board containing the current state of the minefield
       btn_size (optional) - Size to display the cells, in pixels
-    Methods:
-      register_cb(cb_name, fn) - Register a callback function
-      register_all_cbs(ctrlr) - Attempt to register for all callbacks
+      styles (optional) - Image styles to use for minefield buttons
 """
 
 import sys
@@ -22,11 +19,10 @@ import logging
 
 from PyQt5.QtCore import Qt, QRectF, QRect, pyqtSlot
 from PyQt5.QtGui import QPixmap, QPainter, QImage
-from PyQt5.QtWidgets import QApplication, QGraphicsView, QGraphicsScene, QAction
+from PyQt5.QtWidgets import QGraphicsView, QGraphicsScene, QAction
 
-from minegauler.utils import CellState, ASSERT
+from minegauler.shared import CellState, ASSERT, Board
 from minegauler.core import cb_core
-from minegauler.types import Board
 from .utils import init_or_update_cell_images, CellImageType
 
 
@@ -297,6 +293,7 @@ class MinefieldWidget(QGraphicsView):
     
        
 if __name__ == '__main__':
+    from PyQt5.QtWidgets import QApplication
     from minegauler.core import Board
     
     app = QApplication(sys.argv)

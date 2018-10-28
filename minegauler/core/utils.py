@@ -1,5 +1,5 @@
 """
-utils.py - Enumerations, constants and other utils
+utils.py
 
 March 2018, Lewis Gaul
 """
@@ -7,11 +7,11 @@ March 2018, Lewis Gaul
 from os.path import join
 try:
     import cPickle as pickle
-except: #@@@ exception
+except ModuleNotFoundError:
     import pickle
 import logging
 
-from minegauler.utils import files_dir
+from minegauler.shared import files_dir
 from .callbacks import cb_core
 
 
@@ -33,14 +33,3 @@ def change_difficulty(id):
     else:
         raise ValueError("Invalid difficulty ID")
         
-
-def save_settings(settings):
-    """
-    Save settings to 'settings.cfg' file in JSON format.
-    Arguments:
-      settings (dict)
-        Dictionary of settings to save.
-    """
-    logger.info("Saving settings to file: %s", settings)
-    with open(join(files_dir, 'settings.cfg'), 'wb') as f:
-        pickle.dump(settings, f)

@@ -14,13 +14,14 @@ Exports:
       board - The current board state
 """
 
+import time as tm
+import datetime as dt
 import logging
 
 from PyQt5.QtCore import pyqtSlot
 
-from minegauler.utils import ASSERT
-from minegauler.types import (Grid, GameCellMode, CellState, GameState, Board,
-    GameOptionsStruct)
+from minegauler.shared import (ASSERT, Grid, GameCellMode, CellState, GameState,
+    Board, GameOptionsStruct)
 from .callbacks import cb_core
 from .minefield import Minefield
 
@@ -50,6 +51,7 @@ class Controller:
         cb_core.resize_board.connect(self.resize_board)
         # Keeps track of whether the minefield has been created yet.
         self.game_state = GameState.READY
+        self.active_game = None
     
     # @pyqtSlot(tuple)
     def leftclick_cb(self, coord):
@@ -68,6 +70,7 @@ class Controller:
                 safe_coords = []
             self.mf.create(self.opts.mines, self.opts.per_cell, safe_coords)
             self.game_state = GameState.ACTIVE
+            self.active_game = Game(self.mf)
             cb_core.start_game.emit()
             
         self.leftclick_action(coord)
@@ -190,6 +193,7 @@ class Controller:
     def new_game_cb(self):
         """Create a new game."""
         self.game_state = GameState.READY
+        self.active_game = None
         self.mines_remaining = self.opts.mines
         cb_core.set_mines_counter.emit(self.opts.mines)
         self.mf = Minefield(self.opts.x_size, self.opts.y_size)
@@ -205,8 +209,14 @@ class Controller:
             GameState.WON or GameState.LOST.
         """
         self.game_state = game_state
+        self.active_game.end()
         if game_state == GameState.WON:
             cb_core.set_mines_counter.emit(0)
+            hscore = HighscoreStruct(time=self.active_game.duration,
+                                     _3bv=self.active_game.mf.bbbv,
+                                     date=self.active_game.datetime,
+                                     flagging='F') #@@@
+            cb_core.highscore_set.emit(hscore)
     
     def resize_board(self, x_size, y_size, mines):
         logger.info("Resizing board from %sx%s with %s mines to "
@@ -220,10 +230,32 @@ class Controller:
         cb_core.new_game.emit()
     
 
+class Game:
+    def __init__(self, minefield):
+        self.mf = minefield
+        self.start_time = tm.time()
+        self.end_time = None
+    @property
+    def duration(self):
+        if self.start_time is None:
+            raise ValueError("Game not started")
+        if self.end_time is None:
+            raise ValueError("Game not finished")
+        return self.end_time - self.start_time
+    @property
+    def datetime(self):
+        if self.end_time is None:
+            raise ValueError("Game not finished")
+        return dt.datetime.fromtimestamp(self.end_time).strftime(
+                                                            '%d/%m/%y %H:%M:%S')
+    def end(self):
+        self.end_time = tm.time()
+
 
 if __name__ == '__main__':
+    pass
     # from .stubs import StubUI, StubMinefieldUI
-    ctrlr = Controller()
+    # ctrlr = Controller()
     # ui = StubUI(procr)
     # mf_ui = StubMinefieldUI(procr)
 

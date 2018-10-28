@@ -21,7 +21,7 @@ from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import QApplication, QWidget, QFrame, QHBoxLayout, QLabel
 
 from minegauler.core import cb_core
-from minegauler.utils import GameState
+from minegauler.shared import GameState
 from .utils import img_dir, FaceState
 
 

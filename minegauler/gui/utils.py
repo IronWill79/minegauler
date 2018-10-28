@@ -11,7 +11,7 @@ import enum
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QPainter, QImage
 
-from minegauler.utils import get_curdir, CellState, CellImageType
+from minegauler.shared import get_curdir, CellState, CellImageType
 
 
 logger = logging.getLogger(__name__)

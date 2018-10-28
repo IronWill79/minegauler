@@ -18,16 +18,16 @@ from glob import glob
 
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout,
     QHBoxLayout, QFrame, QAction, QActionGroup, QMenu, QSizePolicy)
 
 from minegauler import core
 from minegauler.core import cb_core
-from minegauler.utils import ASSERT
-from minegauler.types import GUIOptionsStruct
-from .utils import img_dir, CellImageType
+from minegauler.shared import GUIOptionsStruct, ASSERT
 from .panel_widget import PanelWidget
 from .minefield_widget import MinefieldWidget
+from .highscores import HighscoresWindow
+from .utils import img_dir, CellImageType
 
 
 logger = logging.getLogger(__name__)
@@ -149,21 +149,13 @@ class BaseMainWindow(QMainWindow):
         
     def init_menubars(self):
         """
-        Initialise the menubar with 'Game', 'Options' and 'Help' menus, each
-        accessible for adding actions to with 'Mainwindow.get_*_menu()'.
+        Initialise the menubar with 'Game', 'Options' and 'Help' menus.
         """
         self.menubar = self.menuBar() # QMainWindow has QMenuBar already
         self.game_menu = self.menubar.addMenu('Game')
         self.opts_menu = self.menubar.addMenu('Options')
         self.help_menu = self.menubar.addMenu('Help')
-        self.populate_menubars()
         
-    def populate_menubars(self):
-        ## GAME MENU
-        exit_act = self.game_menu.addAction('Exit', self.close)
-        exit_act.setShortcut('Alt+F4')
-        ## HELP MENU
-    
     def update_size(self):
         """Update the window size."""
         self.panel_frame.adjustSize()
@@ -191,11 +183,12 @@ class BaseMainWindow(QMainWindow):
     
 class MinegaulerGUI(BaseMainWindow):
     def __init__(self, board, opts=None):
+        super().__init__('MineGauler')
         if opts:
             self.opts = opts
         else:
             self.opts = GUIOptionsStruct()
-        super().__init__('MineGauler')
+        self.populate_menubars()
         self.set_panel_widget(PanelWidget(self))
         self.set_body_widget(MinefieldWidget(self,
                                              board,
@@ -203,6 +196,8 @@ class MinegaulerGUI(BaseMainWindow):
                                              self.opts.styles))
         cb_core.update_window_size.connect(self.update_size)
         cb_core.change_mf_style.connect(self.update_style)
+        self.highscores_window = HighscoresWindow(self)
+        self.highscores_window.table.name_hint = self.opts.name
         
     def populate_menubars(self):
         ## GAME MENU
@@ -215,7 +210,7 @@ class MinegaulerGUI(BaseMainWindow):
         #                                       cb_core.replay_game.emit)
         # replay_act.setShortcut('F3')
         # Show highscores action
-        hs_act = self.game_menu.addAction('Highscores', lambda: None)
+        hs_act = self.game_menu.addAction('Highscores', self.show_highscores)
         hs_act.setShortcut('F6')
         self.game_menu.addSeparator()
         # Difficulty radiobuttons
@@ -256,6 +251,9 @@ class MinegaulerGUI(BaseMainWindow):
         
         ## HELP MENU
         
+    def show_highscores(self):
+        self.highscores_window.show()
+        
     def update_style(self, img_type, style):
         self.opts.styles[img_type] = style
         
@@ -266,7 +264,9 @@ class MinegaulerGUI(BaseMainWindow):
                    
                    
 if __name__ == '__main__':
+    from PyQt5.QtWidgets import QApplication
     from minegauler.core import Board
+    
     app = QApplication(sys.argv)
     main_window = MinegaulerGUI(Board(4, 4))
     main_window.show()

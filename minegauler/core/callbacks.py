@@ -6,7 +6,7 @@ May 2018, Lewis Gaul
 
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, QObject
 
-from minegauler.types import (GameState, CellState, Board, CellImageType)
+from minegauler.shared import (GameState, CellState, Board, CellImageType)
 
 
 class CallbackContainer(QObject):
@@ -40,6 +40,8 @@ class CallbackContainer(QObject):
     change_mf_style = pyqtSignal(CellImageType, str)
     # Call to save current settings to file.
     save_settings = pyqtSignal()
+    # A highscore has been set (highscore passed in).
+    highscore_set = pyqtSignal(HighscoreStruct)
         
         
 cb_core = CallbackContainer()

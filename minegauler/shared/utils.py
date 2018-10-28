@@ -6,7 +6,15 @@ March 2018, Lewis Gaul
 
 from os.path import dirname, abspath, join
 import enum
-from types import SimpleNamespace
+from types import SimpleNamespace, MethodType
+try:
+    import cPickle as pickle
+except ModuleNotFoundError:
+    import pickle
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_curdir(fpath):
@@ -14,13 +22,29 @@ def get_curdir(fpath):
 
 root_dir = dirname(get_curdir(__file__))
 files_dir = join(root_dir, 'files')
+highscores_dir = join(files_dir, 'highscores')
 
 
-def ASSERT(condition, message):
-    """
-    The built-in assert as a function.
-    """
+def ASSERT(condition, message=""):
+    """The built-in assert as a function."""
     assert condition, message
+    
+
+def read_settings():
+    with open(join(files_dir, 'settings.cfg'), 'rb') as f:
+        return pickle.load(f)
+
+
+def save_settings(settings):
+    """
+    Save settings to 'settings.cfg' file in JSON format.
+    Arguments:
+      settings (dict)
+        Dictionary of settings to save.
+    """
+    logger.info("Saving settings to file: %s", settings)
+    with open(join(files_dir, 'settings.cfg'), 'wb') as f:
+        pickle.dump(settings, f)
 
 
 class AddEnum(enum.Enum):
@@ -188,38 +212,107 @@ class Grid(list):
         return nbrs
 
 
+def strip_leading_uscore(string):
+    if string[0] == '_':
+        string = string[1:]
+    return string
+
 class Struct(dict):
-    # Mapping of elements to their defaults.
-    elements = {}
+    """
+    Base class for data structures with generator functionality as in enum.Enum.
+    Data is stored in an ordered dictionary and is also accessible through
+    attributes - keys must be valid variable names, however elements with a
+    single preceding underscore will have the underscore removed for the
+    dictionary key, allowing keys which begin with a digit.
+    Example usage:
+    MyStruct = Struct('MyStruct', elem1=None, _2nd_elem=[])
+    s1 = MyStruct(elem1=1)        # s1: {'elem1': 1, '2nd_elem': []}
+    
+    Note that dictionaries preserve order in CPython3.6 and PEP468 assures that
+    **kwargs will have their order preserved.
+    """
+    #@@@For when dict ordering is not 'supported', OrderedDict should be
+    #subclassed instead.
+    # List of elements.
+    elements = []
+    # Optional mapping of elements to their defaults.
+    defaults = {}
+    # Optional mapping of elements to a restriction for valid values, which can
+    #  be either a set of valid values or a function returning a boolean for
+    #  whether a value is valid.
+    restrictions = {}
     def __init__(self, **kwargs):
         super().__init__()
+        # Allow keys which start with a number by using a preceding underscore.
         for k, v in kwargs.items():
-            self[k] = v
-        for k, v in self.elements.items():
-            if k not in self:
+            self[strip_leading_uscore(k)] = v
+        # Set remaining elements to defaults.
+        for k, v in self.defaults.items():
+            if k not in self.elements:
+                raise ValueError("Invalid element name in defaults mapping")
+            elif k not in self:
                 self[k] = v
-    def __getitem__(self, name):
-        if name in self.elements:
-            if name in self:
-                return super().__getitem__(name)
+    def __new__(cls, _name=None, **kwargs):
+        if cls.__name__ == 'Struct':
+            if not isinstance(_name, str):
+                raise ValueError("Creating a new struct class requires a class "
+                                 "name")
+            struct = type(_name, (Struct,), {})
+            struct.elements = []
+            struct.defaults = {}
+            struct.restrictions = {}
+            for k, v in kwargs.items():
+                k = strip_leading_uscore(k)
+                struct.elements.append(k)
+                struct.defaults[k] = v
+            return struct
+        else:
+            return super().__new__(cls)
+    def __getitem__(self, key):
+        if key not in self.elements:
+            raise KeyError("Unexpected element")
+        if key in self:
+            return super().__getitem__(key)
+        else:
+            return None
+    def __setitem__(self, key, value):
+        if key not in self.elements:
+            raise KeyError("Unexpected element")
+        elif key in self.restrictions and value is not None:
+            invalidity = None
+            if isinstance(self.restrictions[key], (tuple, list, set)):
+                if value not in self.restrictions[key]:
+                    invalidity = "not in set"
+            elif type(self.restrictions[key]) is type:
+                if not isinstance(value, self.restrictions[key]):
+                    invalidity = "wrong type"
             else:
-                return None
-        else:
-            raise KeyError("Unexpected element")
-    def __setitem__(self, name, value):
-        if name in self.elements:
-            super().__setitem__(name, value)
-        else:
-            raise KeyError("Unexpected element")
-    def __getattr__(self, name):
-        if name in self.elements:
-            return self[name]
-        else:
+                try:
+                    if not self.restrictions[key](value):
+                        invalidity = "validity function returned False"
+                except TypeError:
+                    logger.warn("Unexpected restriction type for %s:"
+                                "{%s: %s}",
+                                type(self).__name__,
+                                key,
+                                self.restrictions[key])
+            if invalidity is not None:
+                raise ValueError("Invalid value as determined by "
+                                 "'restrictions': {}".format(invalidity))
+        super().__setitem__(key, value)
+    def __getattr__(self, key):
+        if type(key) is MethodType:
+            super().__getattr(key)
+        # Allow keys which start with a number by using a preceding underscore.
+        key = strip_leading_uscore(key)
+        if key not in self.elements:
             raise AttributeError("Unexpected element")
-    def __setattr__(self, name, value):
-        if name in self.elements:
-            self[name] = value
-        else:
+        return self[key]
+    def __setattr__(self, key, value):
+        # Allow keys which start with a number by using a preceding underscore.
+        key = strip_leading_uscore(key)
+        if key not in self.elements:
             raise AttributeError("Unexpected element")
+        self[key] = value
         
         
