@@ -158,7 +158,7 @@ class MinefieldWidget(QGraphicsView):
 
         for c in [(i, j) for i in range(self.x_size)
                   for j in range(self.y_size)]:
-            self.set_cell_image(c, CellUnclicked())
+            self.set_cell_image(c, CellNum(0))
 
     # --------------------------------------------------------------------------
     # Qt method overrides

@@ -9,10 +9,10 @@ import logging
 import sys
 
 from minegauler import frontend
-from minegauler.backend import Controller, GameOptsStruct
+from minegauler.backend import Controller, CreateBoardController
 from minegauler.frontend import GUIOptsStruct
 from minegauler.shared.utils import (read_settings_from_file,
-    write_settings_to_file)
+    write_settings_to_file, GameOptsStruct)
 
 
 logging.basicConfig(filename='runtime.log', level=logging.DEBUG,
@@ -37,7 +37,8 @@ logger.debug("GUI options: %s", gui_opts)
 
 logger.info("Starting up")
 
-ctrlr = Controller(game_opts)
+# ctrlr = Controller(game_opts)
+ctrlr = CreateBoardController(game_opts)
 
 gui = frontend.create_gui(ctrlr, gui_opts)
 
