@@ -19,7 +19,8 @@ from abc import ABC, abstractmethod
 from minegauler.backend.minefield import Minefield
 from minegauler.backend.utils import Board, Grid
 from minegauler.shared.internal_types import *
-from minegauler.shared.utils import get_num_pos_args_accepted, AbstractStruct
+from minegauler.shared.utils import (get_num_pos_args_accepted, AbstractStruct,
+    GameOptsStruct)
 
 
 logger = logging.getLogger(__name__)
@@ -94,21 +95,6 @@ def _ignore_if_not(*, game_state=None, cell_state=None):
         
         return wrapped
     return decorator
-    
-
-class GameOptsStruct(AbstractStruct):
-    """
-    Structure of game options.
-    """
-    _elements = {
-        'x_size'       : 8,
-        'y_size'       : 8,
-        'mines'        : 10,
-        'first_success': True,
-        'per_cell'     : 1,
-        'lives'        : 1,
-        # 'game_mode'    : GameFlagMode.NORMAL,
-    }
 
 
 class SharedInfo(AbstractStruct):
