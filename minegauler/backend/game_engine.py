@@ -17,7 +17,7 @@ import time as tm
 from abc import ABC, abstractmethod
 
 from minegauler.backend.minefield import Minefield
-from minegauler.backend.utils import Board
+from minegauler.backend.utils import Board, Grid
 from minegauler.shared.internal_types import *
 from minegauler.shared.utils import get_num_pos_args_accepted, AbstractStruct
 
@@ -107,7 +107,7 @@ class GameOptsStruct(AbstractStruct):
         'first_success': True,
         'per_cell'     : 1,
         'lives'        : 1,
-        'game_mode'    : GameFlagMode.NORMAL,
+        # 'game_mode'    : GameFlagMode.NORMAL,
     }
 
 
@@ -379,18 +379,17 @@ class Controller(AbstractController):
         """See AbstractController."""
         
         super().flag_cell(coord)
-        
-        if self.opts.game_mode == GameFlagMode.NORMAL:
-            if self.board[coord] == CellUnclicked():
-                self._set_cell(coord, CellFlag(1))
+
+        if self.board[coord] == CellUnclicked():
+            self._set_cell(coord, CellFlag(1))
+            self.mines_remaining -= 1
+        elif type(self.board[coord]) is CellFlag:
+            if self.board[coord] == CellFlag(self.opts.per_cell):
+                self._set_cell(coord, CellUnclicked())
+                self.mines_remaining += self.opts.per_cell
+            else:
+                self._set_cell(coord, self.board[coord] + 1)
                 self.mines_remaining -= 1
-            elif type(self.board[coord]) is CellFlag:
-                if self.board[coord] == CellFlag(self.opts.per_cell):
-                    self._set_cell(coord, CellUnclicked())
-                    self.mines_remaining += self.opts.per_cell
-                else:
-                    self._set_cell(coord, self.board[coord] + 1)
-                    self.mines_remaining -= 1
         
         self._send_callback_updates()
 
@@ -561,12 +560,6 @@ class Controller(AbstractController):
                 if (self.mf.cell_contains_mine(c) and
                     type(self.board[c]) is not CellHitMine):
                     self._set_cell(c, CellFlag(self.mf[c]))
-                    
-    # def _split_cell(self, coord):
-    #     """
-    #     Split a cell.
-    #     """
-    #     raise NotImplementedError()
     
     def _send_callback_updates(self):
         """See AbstractController."""
@@ -582,4 +575,139 @@ class Controller(AbstractController):
             except Exception as e:
                 logger.warning("Encountered an error sending an update: %s", e)
             
+        self._next_update = SharedInfo(cell_updates={})
+
+
+class CreateBoardController(AbstractController):
+
+    def __init__(self, opts):
+        """
+        Arguments:
+        opts
+            Object containing the required game options as attributes.
+        """
+
+        super().__init__()
+
+        self.opts = opts
+        # Initialise game board.
+        self.board = Board(opts.x_size, opts.y_size)
+        # Game-specific data.
+        self.minefield = Grid(opts.x_size, opts.y_size)
+        self.game_state = GameState.INVALID
+        self.mines = 0
+        self.mines_remaining = 0
+        # Keep track of changes to be passed to UI.
+        self._next_update = SharedInfo(cell_updates={})
+        self._init_completed = True
+        self.new_game()
+
+    def __setattr__(self, key, value):
+        """
+        Intercept updating of certain attributes that should be stored to be
+        passed to frontends.
+        """
+        if hasattr(self, '_init_completed'):
+            if key == 'mines' and value != getattr(self, 'mines'):
+                self._next_update.mines_remaining = value
+
+        return super().__setattr__(key, value)
+
+    def new_game(self):
+        """See AbstractController."""
+
+        super().new_game()
+
+        self.game_state = GameState.ACTIVE
+        self.minefield = Grid(self.opts.x_size, self.opts.y_size)
+        self.mines = 0
+        for c in self.board.all_coords:
+            self._set_cell(c, CellNum(0))
+
+        self._send_callback_updates()
+
+    def restart_game(self):
+        raise NotImplementedError("Can't restart game in create board mode")
+
+    def select_cell(self, coord):
+        pass
+
+    def flag_cell(self, coord):
+        if (type(self.board[coord]) is CellMine and
+                self.board[coord] == CellMine(self.opts.per_cell)):
+            nbr_mines = sum(self.board[c] for c in self.board.get_nbrs(coord)
+                            if isinstance(self.board[c], CellMineType))
+            self._set_cell(coord, CellNum(nbr_mines))
+            change = -self.opts.per_cell
+
+        else:
+            if type(self.board[coord]) == CellNum:
+                self._set_cell(coord, CellMine(1))
+            else:
+                assert type(self.board[coord]) == CellMine
+                self._set_cell(coord, self.board[coord] + 1)
+            change = 1
+
+        self._change_cell_mines(coord, change)
+
+        self._send_callback_updates()
+
+    @_ignore_if_not(cell_state=CellMine)
+    def remove_cell_flags(self, coord):
+        """See AbstractController."""
+
+        super().remove_cell_flags(coord)
+
+        self._set_cell(coord, CellNum(0))
+        self._change_cell_mines(coord, -self.board[coord])
+
+        self._send_callback_updates()
+
+    def chord_on_cell(self, coord):
+        pass
+
+    # COPIED
+    def resize_board(self, *, x_size, y_size, mines=None):
+        """See AbstractController."""
+        super().resize_board(x_size, y_size, mines)
+
+        self.game_state = GameState.INVALID
+        self.opts.x_size, self.opts.y_size = x_size, y_size
+        self.board = Board(x_size, y_size)
+
+        self.new_game()
+
+    # COPIED
+    def _set_cell(self, coord, state):
+        """
+        Set a cell to be in the given state, storing the change to be sent to
+        the UI when _send_callback_updates() is called.
+        """
+        if self.board[coord] == state:
+            return
+
+        self._next_update.cell_updates[coord] = self.board[coord] = state
+
+    def _change_cell_mines(self, coord, change):
+        self.minefield[coord] += change
+        self.mines += change
+        for c in self.board.get_nbrs(coord, include_origin=False):
+            if not isinstance(self.board[c], CellMineType):
+                self._set_cell(c, self.board[c] + change)
+
+    # COPIED
+    def _send_callback_updates(self):
+        """See AbstractController."""
+
+        if self._next_update == SharedInfo(cell_updates={}):
+            return
+
+        super()._send_callback_updates()
+
+        for cb in self._registered_callbacks:
+            try:
+                cb(self._next_update)
+            except Exception as e:
+                logger.warning("Encountered an error sending an update: %s", e)
+
         self._next_update = SharedInfo(cell_updates={})
